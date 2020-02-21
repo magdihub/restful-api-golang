@@ -3,33 +3,33 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"log"
+	"net/http"
 
 	"github.com/gorilla/mux"
-	
-    _ "github.com/go-sql-driver/mysql"
+
 	"database/sql"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var db *sql.DB
 var err error
 
-
-
-
 func main() {
 
-    // init connection with mysql 
+	// init connection with mysql
 	db, err = sql.Open("mysql", "root@tcp(127.0.0.1:3306)/go_with_mysql")
 
-    if err != nil { panic(err.Error())}
+	if err != nil {
+		panic(err.Error())
+	}
 
-    defer db.Close()
+	defer db.Close()
 
-    // fmt.Println("Connected to mysql db!")
+	// fmt.Println("Connected to mysql db!")
 
-    // init routers
+	// init routers
 	r := mux.NewRouter()
 
 	r.HandleFunc("/api/books", getBooks).Methods("GET")
@@ -57,38 +57,40 @@ type Author struct {
 	LastName  string `json:"lastname"`
 }
 
-
-
 // Handlers
 func getBooks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-    fmt.Println("inside getBooks func!")
+	fmt.Println("inside getBooks func!")
 
-    results, err := db.Query("SELECT `books`.`_id`, `title`, `isbn`, `firstname`, `lastname` FROM `books` LEFT JOIN `authors` ON `books`.`author_id` = `authors`.`_id` WHERE 1;")
-    
-    if err != nil { panic(err.Error()) }
+	results, err := db.Query("SELECT `books`.`_id`, `title`, `isbn`, `firstname`, `lastname` FROM `books` LEFT JOIN `authors` ON `books`.`author_id` = `authors`.`_id` WHERE 1;")
 
-    defer results.Close()
+	if err != nil {
+		panic(err.Error())
+	}
 
-    var books []Book
+	defer results.Close()
 
-    for results.Next() {
-    	var book Book
-    	var author Author
+	var books []Book
 
-    	err := results.Scan(
-				    		&book.ID, 
-				    		&book.Isbn, 
-				    		&book.Title, 
-				    		&author.FirstName, 
-				    		&author.LastName )
-        if err != nil { panic(err.Error()) }
+	for results.Next() {
+		var book Book
+		var author Author
 
-        book.Author = &author
+		err := results.Scan(
+			&book.ID,
+			&book.Isbn,
+			&book.Title,
+			&author.FirstName,
+			&author.LastName)
+		if err != nil {
+			panic(err.Error())
+		}
 
-        books = append(books, book)
-    }
+		book.Author = &author
+
+		books = append(books, book)
+	}
 
 	json.NewEncoder(w).Encode(books)
 }
@@ -99,87 +101,104 @@ func getBook(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("inside getBook func!")
 
 	params := mux.Vars(r)
-   
-    result, err := db.Query("SELECT `books`.`_id`, `title`, `isbn`, `firstname`, `lastname` FROM `books` LEFT JOIN `authors` ON `books`.`author_id` = `authors`.`_id` WHERE `books`.`_id` = ?;", params["id"])
-    
-    if err != nil { panic(err.Error()) }
 
-    defer result.Close()
+	result, err := db.Query("SELECT `books`.`_id`, `title`, `isbn`, `firstname`, `lastname` FROM `books` LEFT JOIN `authors` ON `books`.`author_id` = `authors`.`_id` WHERE `books`.`_id` = ?;", params["id"])
 
-    var book Book
-    var author Author
+	if err != nil {
+		panic(err.Error())
+	}
 
-    for result.Next() {
-    	
-    	err := result.Scan(&book.ID, &book.Isbn, &book.Title, &author.FirstName, &author.LastName)
+	defer result.Close()
 
-    	if err != nil { panic(err.Error()) }
+	var book Book
+	var author Author
 
-    	book.Author = &author
+	for result.Next() {
 
-    }
+		err := result.Scan(&book.ID, &book.Isbn, &book.Title, &author.FirstName, &author.LastName)
+
+		if err != nil {
+			panic(err.Error())
+		}
+
+		book.Author = &author
+
+	}
 
 	json.NewEncoder(w).Encode(book)
 }
 
 func createBook(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-	
+	w.Header().Set("Content-Type", "application/json")
+
 	fmt.Println("inside createBook func!")
-	fmt.Printf("%T\n",r.Body)
+	fmt.Printf("%T\n", r.Body)
 
 	type NewBook struct {
-		ID       string  `json:"_id"`
-		Isbn     string  `json:"isbn"`
-		Title    string  `json:"title"`
-		AuthorID int     `json:"author_id"`
+		ID       string `json:"_id"`
+		Isbn     string `json:"isbn"`
+		Title    string `json:"title"`
+		AuthorID int    `json:"author_id"`
 	}
 
-
-    type Resp struct {
-        status  int   
-        msg    string 
-    }
+	type Resp struct {
+		status int
+		msg    string
+	}
 
 	var book NewBook
 
 	json.NewDecoder(r.Body).Decode(&book)
 
 	insert, err := db.Query("INSERT INTO `books` (`_id`, `title`, `isbn`, `author_id`, `updatedAt`, `createdAt`) VALUES (null, ?, ?, ?, NOW(), NOW());", book.Title, book.Isbn, book.AuthorID)
-	if err != nil { panic(err.Error()) }
+	if err != nil {
+		panic(err.Error())
+	}
 
-    defer insert.Close()
+	defer insert.Close()
 
-    payload := Resp{}
-    payload.status = 1 
-    payload.msg = "Book Inserted!"
+	payload := Resp{}
+	payload.status = 1
+	payload.msg = "Book Inserted!"
 
-    payloadJson, err := json.Marshal(payload)
-    if err != nil { panic(err.Error()) }
+	payloadJson, err := json.Marshal(payload)
+	if err != nil {
+		panic(err.Error())
+	}
 
-    fmt.Println(payloadJson)
-    // json.NewDecoder("{ \"status\": 1, \"msg\": \"Book Inserted!\" }").Decode(&payload)
-    w.WriteHeader(http.StatusOK)
-    w.Write(payloadJson)
-
+	fmt.Println(payloadJson)
+	// json.NewDecoder("{ \"status\": 1, \"msg\": \"Book Inserted!\" }").Decode(&payload)
+	w.WriteHeader(http.StatusOK)
+	w.Write(payloadJson)
 
 }
 
+// Update book
 func updateBook(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Whoa, Go is neat!")
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	for index, item := range books {
+		if item.ID == params["id"] {
+			books = append(books[:index], books[index+1:]...)
+			var book Book
+			_ = json.NewDecoder(r.Body).Decode(&book)
+			book.ID = params["id"]
+			books = append(books, book)
+			json.NewEncoder(w).Encode(book)
+			return
+		}
+	}
 }
 
 func deleteBook(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Whoa, Go is neat!")
 }
 
-
-
 // respondwithJSON write json response format
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-    response, _ := json.Marshal(payload)
-    fmt.Println(payload)
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(code)
-    w.Write(response)
+	response, _ := json.Marshal(payload)
+	fmt.Println(payload)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
 }
